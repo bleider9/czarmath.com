@@ -1079,52 +1079,65 @@ class MathTutorApp {
         }, 500);
     }
 
-    loadProgress() {
-        try {
-            const saved = localStorage.getItem('mathTutorProgress');
-            return saved ? JSON.parse(saved) : { solvedTasks: {}, taskProgress: {} };
-        } catch (error) {
-            console.error('Ошибка загрузки прогресса:', error);
-            return { solvedTasks: {}, taskProgress: {} };
+    _setCookie(name, value, days) {
+        let expires = "";
+        if (days) {
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            expires = "; expires=" + date.toUTCString();
         }
+        try {
+            document.cookie = name + "=" + (JSON.stringify(value) || "") + expires + "; path=/; SameSite=Lax";
+        } catch (error) {
+            console.error('Ошибка сохранения cookie:', error);
+            this.showError('Не удалось сохранить прогресс в cookie. Возможно, данные слишком большие.');
+        }
+    }
+
+    _getCookie(name) {
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(';');
+        for (let i = 0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+            if (c.indexOf(nameEQ) === 0) {
+                try {
+                    return JSON.parse(c.substring(nameEQ.length, c.length));
+                } catch (e) {
+                    console.error(`Ошибка парсинга cookie ${name}:`, e);
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    _deleteCookie(name) {
+        document.cookie = name + '=; Max-Age=-99999999; path=/; SameSite=Lax';
+    }
+
+    loadProgress() {
+        const saved = this._getCookie('mathTutorProgress');
+        return saved || { solvedTasks: {}, taskProgress: {} };
     }
 
     saveProgress() {
-        try {
-            localStorage.setItem('mathTutorProgress', JSON.stringify(this.userProgress));
-        } catch (error) {
-            console.error('Ошибка сохранения прогресса:', error);
-        }
+        this._setCookie('mathTutorProgress', this.userProgress, 365);
     }
 
     loadStats() {
-        try {
-            const saved = localStorage.getItem('mathTutorStats');
-            return saved ? JSON.parse(saved) : {
-                totalSolved: 0,
-                currentStreak: 0,
-                maxStreak: 0,
-                lastActivityDate: null,
-                achievements: []
-            };
-        } catch (error) {
-            console.error('Ошибка загрузки статистики:', error);
-            return {
-                totalSolved: 0,
-                currentStreak: 0,
-                maxStreak: 0,
-                lastActivityDate: null,
-                achievements: []
-            };
-        }
+        const saved = this._getCookie('mathTutorStats');
+        return saved || {
+            totalSolved: 0,
+            currentStreak: 0,
+            maxStreak: 0,
+            lastActivityDate: null,
+            achievements: []
+        };
     }
 
     saveStats() {
-        try {
-            localStorage.setItem('mathTutorStats', JSON.stringify(this.userStats));
-        } catch (error) {
-            console.error('Ошибка сохранения статистики:', error);
-        }
+        this._setCookie('mathTutorStats', this.userStats, 365);
     }
 
     exportProgress() {
@@ -1233,12 +1246,16 @@ document.addEventListener('DOMContentLoaded', () => {
     window.mathTutorApp = new MathTutorApp();
 });
 
-window.addEventListener('beforeunload', () => {
+const saveState = () => {
     if (window.mathTutorApp) {
         window.mathTutorApp.saveProgress();
         window.mathTutorApp.saveStats();
     }
-});
+};
+
+// More reliable saving events
+window.addEventListener('beforeunload', saveState);
+window.addEventListener('pagehide', saveState);
 
 const styles = `
 .achievement-notification {
